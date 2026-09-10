@@ -1,9 +1,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
-<title>T-Book 신호 v0.1</title>
+<title>T-Book 신호 v0.2</title>
 <style>
-/* T-Book 신호 v0.1 — 사거리에서 신호기를 조작할 때 보는 화면.
+/* T-Book 신호 v0.2 — 사거리에서 신호기를 조작할 때 보는 화면.
    글씨는 크게, 색은 적게. 장갑 낀 손과 한낮의 햇빛을 전제한다.
    T-Book 본체의 규격을 따른다 — 작은 글씨 대비 7:1, 손가락 닿는 자리 48px. */
 :root{
@@ -60,15 +60,24 @@ h1 small{margin-left:auto;font-size:11px;font-weight:800;color:var(--ink2)}
 .tod b i{font-style:normal;font-weight:800;opacity:.7;margin-left:3px;font-size:10.5px}
 .note{font-size:11.5px;color:var(--ink2);line-height:1.65;padding:7px 2px 0}
 .note b{color:var(--warn)}
+/* 직접 넣기 폼 — 사거리에서 장갑 낀 손으로 두드린다. 칸을 크게 둔다. */
+input{width:100%;min-height:48px;padding:0 12px;margin-bottom:2px;background:var(--bg);
+ color:var(--ink);border:2px solid var(--line);border-radius:10px;
+ font-size:16px;font-family:var(--font);outline:none}
+input:focus{border-color:var(--accent)}
+label{display:block;font-size:12px;font-weight:900;color:var(--accent);margin:9px 0 3px}
+.btn-row{display:flex;gap:7px;margin-top:8px}
+.btn-row .btn{flex:1 1 0;min-width:0}
+.diff:empty{display:none}
 .src{font-size:11px;color:var(--ink2);text-align:center;padding:12px 4px 4px;line-height:1.7}
 </style>
 <div class="wrap">
-<h1>🚦 T-Book 신호 <small id="ver">v0.1</small></h1>
+<h1>🚦 T-Book 신호 <small id="ver">v0.2</small></h1>
 <div id="app"></div>
 <div class="src">
  자료 · <b>경찰청</b>, 공공데이터포털(data.go.kr)<br>
  교차로 <span id="n1">–</span>곳 · 운영계획 <span id="n2">–</span>행 · 신호계획 기준일 <b>2026-09-10</b><br>
- 계획값입니다. 감응·수동 운영 중에는 실제와 다를 수 있습니다.
+ 계획값입니다. 감응·수동 운영 중에는 실제와 다를 수 있습니다.<br>✍ 표시는 <b>형님이 직접 넣은 값</b>이며 이 기기에만 있습니다.
 </div>
 </div>
 <script>
@@ -15438,6 +15447,16 @@ var D_DOW=`42|1|4
  $('n1').textContent=CR.length;
  $('n2').textContent=Object.keys(PL).reduce(function(s,k){return s+PL[k].length;},0);
 
+ /* ── 내가 넣은 교차로 ────────────────────────────────────────────────────
+    경찰청이 여는 서울 교차로는 388곳뿐이라 성모병원·반포·고속터미널처럼
+    정작 자주 나가는 사거리가 빠져 있다. 그 값을 쥐고 있는 곳은 경찰서 교통과
+    신호운영 담당이다 — 형님이 받아 온 것을 여기에 적어 쓴다.
+    기기에만 남는다. 밖으로 나가는 길이 이 앱에는 아예 없다.
+    T-Book 의 「관내별 연락처」와 같은 방식이다. */
+ var MK='tbsig_mine';
+ function mineGet(){ try{ var a=JSON.parse(localStorage.getItem(MK)||'[]'); return a&&a.length?a:[]; }catch(e){ return []; } }
+ function mineSet(a){ try{ localStorage.setItem(MK, JSON.stringify(a)); }catch(e){} }
+
  /* ── 거리 ──────────────────────────────────────────────────────────────── */
  function dist(a1,o1,a2,o2){
   var R=6371000, P=Math.PI/180;
@@ -15489,7 +15508,31 @@ var D_DOW=`42|1|4
   return '<div class="bar">'+s+'</div>';
  }
 
+ /* 내가 넣은 교차로를 그린다. 공공데이터와 같은 모양으로 보이되 출처는 분명히 갈라 둔다 —
+    어느 값이 어디서 온 것인지 헷갈리면 그것이 곧 잘못된 조작이 된다. */
+ function renderMine(i, d, pos){
+  var m=mineGet()[i]; if(!m){ start(); return; }
+  var A=m.ph.filter(function(v){return v>0;}), sum=A.reduce(function(a,b){return a+b;},0);
+  var h='<div class="card" style="border-color:var(--b);border-width:2px">';
+  h+='<div class="now"><span class="nm">'+esc(m.nm)+'</span>';
+  if(d!=null) h+='<span class="d">'+(d<1000?Math.round(d)+'m':(d/1000).toFixed(1)+'km')+'</span>';
+  h+='</div>';
+  h+='<div class="cyc"><b>'+m.c+'</b><span>초 주기</span><span>· '+A.length+'현시</span></div>';
+  h+='<div class="msg">✍ <b>내가 넣은 값</b>'+(m.memo?' · '+esc(m.memo):'')
+    +(m.t?' <span style="color:var(--ink2)">('+new Date(m.t).toLocaleDateString('ko-KR')+' 적음)</span>':'')+'</div>';
+  h+='<div class="ring"><div class="lb">현시</div>'+barHtml(A,m.c)+'</div>';
+  if(sum!==m.c) h+='<div class="diff">⚠ 현시 합 '+sum+'초가 주기 '+m.c+'초와 다릅니다 — 적은 값을 다시 보십시오</div>';
+  h+='<div class="note">이 값은 <b>공공데이터가 아니라 형님이 적어 넣은 것</b>입니다. '
+    +'출처와 적은 날을 스스로 관리하십시오. <b>이 기기에만 있습니다.</b></div>';
+  h+='<div class="btn-row"><button class="btn sec" data-edit="'+i+'">✍ 고치기</button>'
+    +'<button class="btn sec" data-del="'+i+'">🗑 지우기</button></div>';
+  h+='</div>';
+  $('app').innerHTML=h+listHtml(pos,'M'+i);
+  bind(pos);
+ }
+
  function render(no, d, pos){
+  if(String(no).charAt(0)==='M'){ renderMine(+String(no).slice(1), d, pos); return; }
   var now=new Date(), c=CR.filter(function(x){return x.no===no;})[0];
   var P=pickPlan(no, now);
   var h='';
@@ -15525,24 +15568,89 @@ var D_DOW=`42|1|4
   bind(pos);
  }
 
- var NEAR=[];
+ var NEAR=[], POS=null;
  function listHtml(pos, cur){
-  if(!NEAR.length) return '';
-  var h='<div class="msg" style="padding-top:4px">가까운 교차로</div>';
-  NEAR.forEach(function(x){
-   h+='<button class="pick'+(x.no===cur?' on':'')+'" data-no="'+x.no+'" data-d="'+Math.round(x.d)+'">'
-     +esc(x.nm)+'<i>'+(x.d<1000?Math.round(x.d)+'m':(x.d/1000).toFixed(1)+'km')+'</i></button>';
-  });
+  var h='';
+  if(NEAR.length){
+   h+='<div class="msg" style="padding-top:4px">가까운 교차로</div>';
+   NEAR.forEach(function(x){
+    h+='<button class="pick'+(x.no===cur?' on':'')+'" data-no="'+x.no+'" data-d="'+Math.round(x.d)+'">'
+      +(x.mine?'✍ ':'')+esc(x.nm)+'<i>'+(x.d<1000?Math.round(x.d)+'m':(x.d/1000).toFixed(1)+'km')+'</i></button>';
+   });
+  }
+  /* 자리를 알고 있을 때만 「직접 넣기」를 내민다 — 좌표 없이 적으면 나중에 못 찾는다. */
+  if(POS) h+='<button class="btn sec" style="margin-top:6px" id="addnew">✍ 이 자리 교차로 직접 넣기</button>';
   return h;
  }
  function bind(pos){
   Array.prototype.forEach.call(document.querySelectorAll('.pick'),function(b){
    b.onclick=function(){ render(b.getAttribute('data-no'), +b.getAttribute('data-d'), pos); };
   });
+  var add=$('addnew'); if(add) add.onclick=function(){ form(-1, pos); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'),function(b){
+   b.onclick=function(){ form(+b.getAttribute('data-edit'), pos); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-del]'),function(b){
+   b.onclick=function(){
+    var i=+b.getAttribute('data-del'), a=mineGet();
+    if(!confirm('「'+a[i].nm+'」을 지웁니다. 되돌릴 수 없습니다.')) return;
+    a.splice(i,1); mineSet(a);
+    if(POS) show(POS.lat,POS.lon); else start();
+   };
+  });
+ }
+
+ /* ── 직접 넣기 ─────────────────────────────────────────────────────────
+    적을 것은 셋뿐이다 — 이름 · 주기 · 각 현시 초.
+    옵셋은 받지 않는다. 연동을 계산할 때 쓰는 값이지 조작에는 안 쓴다.
+    현시 합이 주기와 다르면 저장은 하되 화면에 계속 표시해 둔다 —
+    막는 것보다 눈에 띄게 두는 편이 낫다. 실제 신호가 그럴 수도 있다. */
+ function form(idx, pos){
+  var a=mineGet(), m=(idx>=0?a[idx]:{nm:'',c:'',ph:[],memo:''});
+  var h='<div class="card" style="border-color:var(--b);border-width:2px">';
+  h+='<div class="now"><span class="nm">'+(idx>=0?'고치기':'이 자리 교차로 넣기')+'</span></div>';
+  h+='<div class="msg">교통과 신호운영 담당에게 받은 값을 적습니다. <b>이 기기에만 남습니다.</b></div>';
+  h+='<label>교차로 이름</label><input id="f_nm" type="text" placeholder="예: 서울성모병원사거리" value="'+esc(m.nm||'')+'">';
+  h+='<label>주기 (초)</label><input id="f_c" type="number" inputmode="numeric" placeholder="예: 150" value="'+(m.c||'')+'">';
+  h+='<label>각 현시 초 — 빈칸으로 나눠 적으십시오</label>'
+    +'<input id="f_ph" type="text" inputmode="numeric" placeholder="예: 55 32 37 26" value="'+esc((m.ph||[]).join(' '))+'">';
+  h+='<label>메모 (받은 곳·날짜)</label><input id="f_memo" type="text" placeholder="예: 서초서 교통과 확인" value="'+esc(m.memo||'')+'">';
+  h+='<div id="f_chk" class="diff"></div>';
+  h+='<div class="btn-row" style="margin-top:8px"><button class="btn" id="f_save">저장</button>'
+    +'<button class="btn sec" id="f_cancel">그만</button></div>';
+  if(idx<0&&pos) h+='<div class="note">자리는 <b>지금 있는 곳</b>으로 적힙니다 — 사거리 한가운데에서 넣으십시오.</div>';
+  h+='</div>';
+  $('app').innerHTML=h;
+  function chk(){
+   var c=+$('f_c').value||0, ph=($('f_ph').value||'').trim().split(/[\s,]+/).map(Number).filter(function(v){return v>0;});
+   var s=ph.reduce(function(x,y){return x+y;},0);
+   $('f_chk').textContent=(c&&s&&s!==c)?('⚠ 현시 합 '+s+'초 ≠ 주기 '+c+'초'):(c&&s?('✔ 현시 합 '+s+'초 = 주기'):'');
+   $('f_chk').style.color=(c&&s&&s===c)?'#2e9e5b':'';
+  }
+  $('f_c').oninput=chk; $('f_ph').oninput=chk; chk();
+  $('f_cancel').onclick=function(){ if(POS) show(POS.lat,POS.lon); else start(); };
+  $('f_save').onclick=function(){
+   var nm=($('f_nm').value||'').trim(), c=+$('f_c').value||0;
+   var ph=($('f_ph').value||'').trim().split(/[\s,]+/).map(Number).filter(function(v){return v>0;});
+   if(!nm){ alert('교차로 이름을 적으십시오.'); return; }
+   if(!(c>0)){ alert('주기(초)를 적으십시오.'); return; }
+   if(!ph.length){ alert('각 현시 초를 적으십시오. 예: 55 32 37 26'); return; }
+   var rec={nm:nm, c:c, ph:ph, memo:($('f_memo').value||'').trim(), t:Date.now(),
+            la:(idx>=0?m.la:(pos?pos.lat:0)), lo:(idx>=0?m.lo:(pos?pos.lon:0))};
+   if(idx>=0) a[idx]=rec; else a.push(rec);
+   mineSet(a);
+   if(POS) show(POS.lat,POS.lon); else start();
+  };
  }
 
  function show(lat, lon, how){
+  POS={lat:lat, lon:lon};
+  /* 공공데이터 388곳과 내가 넣은 것을 한 목록에 섞어 거리순으로 세운다.
+     섞되 출처는 목록에서도 ✍ 로 갈라 보인다. */
+  var mine=mineGet().map(function(m,i){
+   return {no:'M'+i, nm:m.nm, mine:1, d:dist(lat,lon,m.la,m.lo)}; });
   NEAR=CR.map(function(c){ return {no:c.no, nm:c.nm, d:dist(lat,lon,c.la,c.lo)}; })
+         .concat(mine)
          .sort(function(a,b){ return a.d-b.d; }).slice(0,6);
   var top=NEAR[0];
   /* 300m 넘으면 「이 자리의 교차로」가 아니다.
@@ -15557,11 +15665,12 @@ var D_DOW=`42|1|4
     +'가장 가까운 것이 <b>'+esc(top.nm)+' '+far+'</b>인데, <b>다른 교차로입니다.</b> '
     +'그 값을 이 자리 신호로 읽으면 안 됩니다.<br><br>'
     +'경찰청이 공개하는 서울 교차로는 <b>388곳뿐</b>입니다. '
-    +'<b>성모병원·반포·고속터미널·교대역·남부터미널</b> 사거리는 목록에 없습니다.'
+    +'<b>성모병원·반포·고속터미널·교대역·남부터미널</b> 사거리는 목록에 없습니다.<br><br>'
+    +'교통과 신호운영 담당에게 받은 값이 있으면 <b>여기에 적어 두고 쓰실 수 있습니다.</b>'
     +'</div></div>'
     +'<div class="msg" style="padding-top:2px">아래는 <b>참고용</b>입니다 — 지금 자리의 신호가 아닙니다.</div>'
-    +listHtml(null,null);
-   bind(null); return;
+    +listHtml({lat:lat,lon:lon},null);
+   bind({lat:lat,lon:lon}); return;
   }
   render(top.no, top.d, {lat:lat,lon:lon});
  }
